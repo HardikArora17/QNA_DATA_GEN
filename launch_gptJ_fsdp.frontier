@@ -1,12 +1,12 @@
 #!/bin/bash
 
 #SBATCH -A STF218
-#SBATCH -J gpt_frontier
-#SBATCH -o logs/gpt_oscar_fsdp_2N-%j.o
-#SBATCH -e logs/gpt_oscar_fsdp_2N-%j.e
-#SBATCH -t 00:20:00
+#SBATCH -J mistral_qna_frontier
+#SBATCH -o logs/gpt_oscar_fsdp_1N-%j.o
+#SBATCH -e logs/gpt_oscar_fsdp_1N-%j.e
+#SBATCH -t 00:15:00
 #SBATCH -p batch
-#SBATCH -N 2
+#SBATCH -N 1
 
 set +x
 source /lustre/orion/world-shared/stf218/sajal/miniconda3/bin/activate
@@ -69,7 +69,6 @@ export https_proxy=https://proxy.ccs.ornl.gov:3128
 export http_proxy=http://proxy.ccs.ornl.gov:3128
 export OMP_NUM_THREADS=2
 
-#srun -u -n1 -c2 --ntasks-per-node=1 --gpus-per-node=1 --gpu-bind=closest python finetuning_main.py \
 srun -u -n$ranks_total -c2 --ntasks-per-node=8 --gpus-per-node=8 --gpu-bind=closest python finetuning_main.py \
    --output_dir ./outputs \
    --do_train=True \
