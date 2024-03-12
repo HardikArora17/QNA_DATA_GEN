@@ -15,9 +15,11 @@ def run_finetuning(data_filename, model_name, new_model_name, output_path):
     instruct_data = create_data(data_filename)
 
     data = pd.DataFrame({'text': instruct_data})
-
+    print("DATA_LOADED")
+    
     # Convert the DataFrame to a Hugging Face Dataset
     dataset = Dataset.from_pandas(data)
+    
 
     # Load tokenizer and model with QLoRA configuration
     compute_dtype = getattr(torch, bnb_4bit_compute_dtype)
@@ -75,7 +77,7 @@ def run_finetuning(data_filename, model_name, new_model_name, output_path):
         device_map=device_map)
 
     model = FSDP(model)
-
+    print("MODEL INITIALIZED")
     # If the GPU MEMORY IS FILLED
     # model = AutoModelForCausalLM.from_pretrained(
     #     model_name,
@@ -123,6 +125,7 @@ def run_finetuning(data_filename, model_name, new_model_name, output_path):
         lr_scheduler_type=lr_scheduler_type,
         report_to="wandb")
 
+    print("LOADED TRAINING ARGUMENTS")
     # Set supervised fine-tuning parameters
     trainer = SFTTrainer(
         model=model,
@@ -136,14 +139,15 @@ def run_finetuning(data_filename, model_name, new_model_name, output_path):
     )
 
     # Train model
+    print("training_started")
+    
     trainer.train()
-
     # Save trained model
     trainer.model.save_pretrained(new_model_name)
 
     model_state_dict = model.state_dict()
     torch.save(model_state_dict, f'{output_path}/{new_model_name}_state.pt')
-
+    
     print("Model state dictionary saved.")
 
 
@@ -155,7 +159,7 @@ if __name__ == '__main__':
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-
+    print("directories_made")
     run_finetuning(model_name, data_file_path, new_model_name, output_file_path)
 
 #<Tirthankar-Ghosal>
