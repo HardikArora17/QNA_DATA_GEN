@@ -68,4 +68,4 @@ export https_proxy=https://proxy.ccs.ornl.gov:3128
 export http_proxy=http://proxy.ccs.ornl.gov:3128
 export OMP_NUM_THREADS=2
 
-srun -u -n$ranks_total -c2 --ntasks-per-node=8 --gpus-per-node=8 --gpu-bind=closest python finetuning_main.py 
+srun -u -n$ranks_total -c2 --ntasks-per-node=8 --gpus-per-node=8 --gpu-bind=closest python finetuning_main_phi2.py 
