@@ -4,10 +4,10 @@ import torch
 ################################################################################
 
 # LoRA attention dimension
-lora_r = 64
+lora_r = 16
 
 # Alpha parameter for LoRA scaling
-lora_alpha = 16
+lora_alpha = 8
 
 # Dropout probability for LoRA layers
 lora_dropout = 0.1
@@ -43,10 +43,10 @@ fp16 = False
 bf16 = False
 
 # Batch size per GPU for training
-per_device_train_batch_size = 4
+per_device_train_batch_size = 2
 
 # Batch size per GPU for evaluation
-per_device_eval_batch_size = 4
+per_device_eval_batch_size = 1
 
 # Number of update steps to accumulate the gradients for
 gradient_accumulation_steps = 1
@@ -61,7 +61,7 @@ max_grad_norm = 0.3
 learning_rate = 2e-4
 
 # Weight decay to apply to all layers except bias/LayerNorm weights
-weight_decay = 0.001
+weight_decay = 0
 
 # Optimizer to use
 optim = "paged_adamw_32bit"
@@ -94,6 +94,3 @@ max_seq_length = None
 
 # Pack multiple short examples in the same input sequence to increase efficiency
 packing = False
-
-# Load the entire model on the GPU 0
-device_map = {"": 0}
