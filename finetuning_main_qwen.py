@@ -5,7 +5,7 @@ from trl import SFTTrainer
 from datasets import Dataset
 import pandas as pd
 from data_create import create_data
-from global_variables_phi2 import *
+from global_variables_qwen import *
 import os
 # from mpi4py import MPI
 from datasets import load_dataset
