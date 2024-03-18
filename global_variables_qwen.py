@@ -4,10 +4,10 @@ import torch
 ################################################################################
 
 # LoRA attention dimension
-lora_r = 64
+lora_r = 16
 
 # Alpha parameter for LoRA scaling
-lora_alpha = 16
+lora_alpha = 8
 
 # Dropout probability for LoRA layers
 lora_dropout = 0.1
@@ -20,7 +20,7 @@ lora_dropout = 0.1
 use_4bit = True
 
 # Compute dtype for 4-bit base models
-bnb_4bit_compute_dtype = torch.bfloat16
+bnb_4bit_compute_dtype = "float16"
 
 # Quantization type (fp4 or nf4)
 bnb_4bit_quant_type = "nf4"
@@ -32,6 +32,9 @@ use_nested_quant = False
 # TrainingArguments parameters
 ################################################################################
 
+# Output directory where the model predictions and checkpoints will be stored
+output_dir = "./results"
+
 # Number of training epochs
 num_train_epochs = 1
 
@@ -40,10 +43,10 @@ fp16 = False
 bf16 = False
 
 # Batch size per GPU for training
-per_device_train_batch_size = 4
+per_device_train_batch_size = 2
 
 # Batch size per GPU for evaluation
-per_device_eval_batch_size = 4
+per_device_eval_batch_size = 1
 
 # Number of update steps to accumulate the gradients for
 gradient_accumulation_steps = 1
@@ -58,13 +61,13 @@ max_grad_norm = 0.3
 learning_rate = 2e-4
 
 # Weight decay to apply to all layers except bias/LayerNorm weights
-weight_decay = 0.001
+weight_decay = 0
 
 # Optimizer to use
 optim = "paged_adamw_32bit"
 
 # Learning rate schedule
-lr_scheduler_type = "constant"
+lr_scheduler_type = "cosine"
 
 # Number of training steps (overrides num_train_epochs)
 max_steps = -1
@@ -77,7 +80,7 @@ warmup_ratio = 0.03
 group_by_length = True
 
 # Save checkpoint every X updates steps
-save_steps = 25
+save_steps = 0
 
 # Log every X updates steps
 logging_steps = 25
