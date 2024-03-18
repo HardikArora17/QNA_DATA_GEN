@@ -33,7 +33,7 @@ use_nested_quant = False
 ################################################################################
 
 # Output directory where the model predictions and checkpoints will be stored
-output_dir = "./results"
+output_dir = "./results_phi2"
 
 # Number of training epochs
 num_train_epochs = 1
