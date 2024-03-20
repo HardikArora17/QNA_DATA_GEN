@@ -27,7 +27,7 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
     model_path = os.path.join('models/', model_name)
     model = AutoModelForCausalLM.from_pretrained(model_path)
 
-    model = model.to('cuda:0')
+    # model = model.to('cuda:0')
 
     print("MODEL INITIALIZED")
     print("Model's parameters device:", next(model.parameters()).device)
