@@ -5,6 +5,9 @@ import pandas as pd
 from global_variables_llama import *
 import os
 from datasets import load_from_disk
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from datetime import timedelta
+from mpi4py import MPI
 
 
 def run_finetuning(dataset, model_name, new_model_name, output_path):
@@ -23,10 +26,39 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
 
     train_dataset = dataset.shuffle().map(tokenize_function, batched=True)
     print("DATA_LOADED")
+
+    master_addr = os.environ["MASTER_ADDR"]
+    print("Master address from main:", master_addr)
+
+    master_port = "29500"
+
+    def setup_distributed_env(init_method=None, rank = 0, world_size=16): 
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        world_size = comm.Get_size()
+        world_rank = rank = comm.Get_rank()
+        #world_size = int(os.environ['OMPI_COMM_WORLD_SIZE'])
+        #world_rank = int(os.environ['OMPI_COMM_WORLD_RANK'])
+        backend = None
+        os.environ['MASTER_ADDR'] = master_addr
+        os.environ['MASTER_PORT'] = master_port
+        os.environ['WORLD_SIZE'] = str(world_size)
+        os.environ['RANK'] = str(world_rank)
+        os.environ['LOCAL_RANK'] = "0"#str(world_rank % 8)
+        print("initialization parameters:", init_method, backend, rank, world_size)
+        torch.distributed.init_process_group(backend,
+                                            #timeout=default_pg_timeout,
+                                            init_method=init_method,
+                                            rank=rank,
+                                            world_size=world_size)
+        using_mpi = torch.distributed.get_backend() == 'mpi'
+        print("using_mpi=", using_mpi)
     
+    setup_distributed_env()
+
     model_path = os.path.join('/lustre/orion/proj-shared/stf218/tirthankar/astro_finetuning/QNA_DATA_GEN/model/', model_name)
     model = AutoModelForCausalLM.from_pretrained(model_path)
-
+    model = FSDP(model)
     # model = model.to('cuda:0')
 
     print("MODEL INITIALIZED")
