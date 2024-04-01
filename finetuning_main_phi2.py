@@ -10,7 +10,7 @@ from datasets import load_from_disk
 def run_finetuning(dataset, model_name, new_model_name, output_path):
     
      # Load LLaMA tokenizer
-    tokenizer_path = os.path.join('tokenizers/', model_name)
+    tokenizer_path = os.path.join('/lustre/orion/proj-shared/stf218/tirthankar/astro_finetuning/QNA_DATA_GEN/tokenizers/', model_name)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"  # Fix weird overflow issue with fp16 training
@@ -24,7 +24,7 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
     train_dataset = dataset.shuffle().map(tokenize_function, batched=True)
     print("DATA_LOADED")
     
-    model_path = os.path.join('models/', model_name)
+    model_path = os.path.join('/lustre/orion/proj-shared/stf218/tirthankar/astro_finetuning/QNA_DATA_GEN/model/', model_name)
     model = AutoModelForCausalLM.from_pretrained(model_path)
 
     # model = model.to('cuda:0')
@@ -81,15 +81,15 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
 if __name__ == '__main__':
     model_name = 'microsoft-phi2'
     dataset_name = 'astro-abstracts'
-    dataset_path = os.path.join('dataset', dataset_name)
+    dataset_path = os.path.join('/lustre/orion/proj-shared/stf218/tirthankar/astro_finetuning/QNA_DATA_GEN/dataset', dataset_name)
     dataset = load_from_disk(dataset_path)['train'].select(range(100))
     
     new_model_name = 'finetuned_astr_phi2'
     
-    output_file_path = 'stored_output_model'
+    output_file_path = '/lustre/orion/proj-shared/stf218/tirthankar/astro_finetuning/QNA_DATA_GEN/stored_output_model'
     
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    if not os.path.exists(output_file_path):
+        os.makedirs(output_file_path, exist_ok = True)
     
     print("directories_made")
     run_finetuning(dataset, model_name, new_model_name, output_file_path)
