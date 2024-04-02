@@ -2,7 +2,7 @@ import torch
 import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer
 import pandas as pd
-from global_variables_llama import *
+from global_variables_phi2 import *
 import os
 from datasets import load_from_disk
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
