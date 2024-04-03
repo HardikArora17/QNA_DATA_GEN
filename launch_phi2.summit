@@ -5,8 +5,8 @@
 #BSUB -P stf218
 #BSUB -alloc_flags "smt4 nvme"
 #BSUB -J llm-classifier-forge-m2-20
-#BSUB -o logs/llm-classifier-forge-m2-20.%J.o
-#BSUB -e logs/llm-classifier-forge-m2-20.%J.e
+#BSUB -o logs/phi_output.%J.o
+#BSUB -e logs/phi_error.%J.e
 ##BSUB -q debug
 
 set +x
