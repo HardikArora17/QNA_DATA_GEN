@@ -7,9 +7,7 @@ import pandas as pd
 from data_create import create_data
 from global_variables_qwen import *
 import os
-# from mpi4py import MPI
 from datasets import load_dataset
-# from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
 
 def run_finetuning(data_filename, model_name, new_model_name, output_path):
@@ -113,8 +111,8 @@ if __name__ == '__main__':
     new_model_name = 'finetuned_qwen_astro_data'
     output_file_path = 'output_finetuned_model'
     
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    if not os.path.exists(output_file_path):
+        os.makedirs(output_file_path)
     
     print("directories_made")
     run_finetuning(dataset, model_name, new_model_name, output_file_path)
