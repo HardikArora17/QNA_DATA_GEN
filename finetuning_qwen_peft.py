@@ -103,7 +103,7 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
 
 
 if __name__ == '__main__':
-    model_name = 'Qwen/Qwen1.5-0.5B'
+    model_name = 'Qwen/Qwen1.5-1.8B'
     dataset_name = 'universeTBD/arxiv-astro-abstracts-all'
     dataset_path = os.path.join(dataset_name)
     dataset = load_dataset(dataset_path)['train'].select(range(100))
