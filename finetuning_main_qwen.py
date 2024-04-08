@@ -67,7 +67,7 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         logging_steps=logging_steps,
         learning_rate=learning_rate,
         weight_decay=weight_decay,
-        optim='adamw_hf',
+        optim=optim,
         max_grad_norm=max_grad_norm,
         max_steps=max_steps,
         warmup_ratio=warmup_ratio,
