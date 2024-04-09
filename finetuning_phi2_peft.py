@@ -55,13 +55,10 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         bias="none",
         task_type="CAUSAL_LM",
         target_modules = [
-        "q_proj",  # Targeting query projection in PhiAttention
-        "k_proj",  # Targeting key projection in PhiAttention
-        "v_proj",  # Targeting value projection in PhiAttention
-        "dense",   # Targeting the dense layer in PhiAttention for output transformation, not sure if appropriate, comment out if not necessary
+        "Wqkv",
         "fc1",     # Targeting the first fully connected layer in PhiMLP
-        "fc2",     # Targeting the second fully connected layer in PhiMLP]
-        )
+        "fc2"     # Targeting the second fully connected layer in PhiMLP]
+        ])
 
     # Set training parameters
     training_arguments = TrainingArguments(
