@@ -6,7 +6,7 @@ from datasets import Dataset
 import pandas as pd
 from global_variables_phi2 import *
 import os
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk
 
 
 def run_finetuning(dataset, model_name, new_model_name, output_path):
@@ -32,12 +32,12 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
     def tokenize_function(examples):
       return tokenizer(examples["text"], truncation=True)
 
-    train_dataset = dataset.shuffle().map(tokenize_function, batched=True)
+    train_dataset = dataset #.shuffle().map(tokenize_function, batched=True)
     print("DATA_LOADED")
 
     model_path = model_name
     model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=bnb_config)
-    model = model.to('cuda')
+    # model = model.to('cuda')
     print("MODEL INITIALIZED")
     print("Model's parameters device:", next(model.parameters()).device)
 
@@ -111,10 +111,10 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
 if __name__ == '__main__':
     model_name = 'microsoft/phi-2'
     dataset_name = 'universeTBD/arxiv-astro-abstracts-all'
-    dataset_path = os.path.join(dataset_name)
-    dataset = load_dataset(dataset_path)['train'].select(range(100))
-    
-    new_model_name = 'finetuned_astr_phi2'
+    dataset_path = dataset_name
+    # dataset = load_dataset(dataset_path)['train'].select(range(100))
+    dataset = load_from_disk(dataset_path)
+    new_model_name = 'astrophi-full'
     output_file_path = 'stored_output_model'
     
     if not os.path.exists(output_file_path):
