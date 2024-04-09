@@ -86,7 +86,7 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         train_dataset=dataset,
         peft_config=peft_config,
         dataset_text_field="text",
-        max_seq_length=690,
+        max_seq_length= tokenizer.model_max_length,
         tokenizer=tokenizer,
         args=training_arguments,
         packing=packing
