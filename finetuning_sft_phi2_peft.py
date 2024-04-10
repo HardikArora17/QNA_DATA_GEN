@@ -7,7 +7,7 @@ import pandas as pd
 from global_variables_phi2 import *
 import os
 from datasets import load_dataset, load_from_disk
-
+from upload_to_hub import upload_to_hub
 
 def run_finetuning(dataset, model_name, new_model_name, output_path):
 
@@ -29,19 +29,14 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
 
     print("tokenizer done")
     
-    def tokenize_function(examples):
-      return tokenizer(examples["text"], truncation=True)
-
     train_dataset = dataset #.shuffle().map(tokenize_function, batched=True)
     print("DATA_LOADED")
 
     model_path = model_name
-    model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=bnb_config, device_map="auto")
-    # model = model.to('cuda')
+    model = AutoModelForCausalLM.from_pretrained(model_path, quantization_config=bnb_config, device_map="auto")
+    
     print("MODEL INITIALIZED")
     print("Model's parameters device:", next(model.parameters()).device)
-
-    # Alternatively, you can print the device of the model itself
     print("Model's device:", next(model.parameters()).device)
 
     model.config.use_cache = False
@@ -86,7 +81,7 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         train_dataset=dataset,
         peft_config=peft_config,
         dataset_text_field="text",
-        max_seq_length= tokenizer.model_max_length,
+        max_seq_length= 400,
         tokenizer=tokenizer,
         args=training_arguments,
         packing=packing
@@ -96,48 +91,39 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
     print("training_started")
 
     trainer.train()
-    # Save trained model
     trainer.model.save_pretrained( f'{output_path}/{new_model_name}')
-
-    model_state_dict = model.state_dict()
-    torch.save(model_state_dict, f'{output_path}/{new_model_name}_state.pt')
-
-    print("Model state dictionary saved.")
+    print("Model saved.")
 
 
 if __name__ == '__main__':
-
-    #Continual Pre-training part of code
+    #From continual_pretraining step
     base_model_name = 'microsoft/phi-2'
-    cpt_dataset_name = 'universeTBD/arxiv-astro-abstracts-all'
-    cpt_dataset_path = cpt_dataset_name
-  
-    # dataset = load_dataset(dataset_path)['train'].select(range(100))
-    cpt_dataset = load_from_disk(cpt_dataset_path)
-  
-    new_cpt_model_name = 'cpt_astrophi-full'
+    new_cpt_model_name = 'cpt_astrophi-aic'
     cpt_output_file_path = 'stored_output_model_cpt'
-    
-    if not os.path.exists(cpt_output_file_path):
-        os.makedirs(cpt_output_file_path, exist_ok = True)
-    
-    print("directories_made")
-    run_finetuning(cpt_dataset, base_model_name, new_cpt_model_name, cpt_output_file_path)
 
-    #Supervised finetuning part of code
-    
     adapter_model_name = os.path.join(cpt_output_file_path, new_cpt_model_name)
-    sft_dataset_name = 'universeTBD/arxiv-astro-abstracts-all'
-    sft_dataset_path = cpt_dataset_name
-  
-    # dataset = load_dataset(dataset_path)['train'].select(range(100))
+
+    # Saving the full model
+    base_model_path = base_model_name
+    base_model  = AutoModelForCausalLM.from_pretrained(base_model_path, quantization_config=bnb_config, device_map='auto')  
+    peft_model = PeftModel.from_pretrained(base_model, adapter_model_name)
+    model = peft_model.merge_and_unload()
+    model.save_pretrained(f'{cpt_output_file_path}/{new_cpt_model_name}')
     
-  
+    #Supervised finetuning
+    model_name = os.path.join(cpt_output_file_path, new_cpt_model_name)
+    new_sft_model_name = 'sft_astrophi-aic'
+    
+    sft_dataset_name = 'AstroMLab/astro-ph-qa_extended_text-only'
+    sft_dataset_path = sft_dataset_name
+    sft_dataset = load_dataset(sft_dataset_path)['split_train'].select(range(100))
+    
     sft_output_file_path = 'stored_output_model_sft'
     
     if not os.path.exists(sft_output_file_path):
         os.makedirs(sft_output_file_path, exist_ok = True)
       
-    run_finetuning(cpt_dataset, adapter_model_name, new_cpt_model_name, sft_output_file_path)
+    run_finetuning(sft_dataset, model_name, new_sft_model_name, sft_output_file_path)
+    upload_to_hub(adapter_model_name, os.path.join(sft_output_file_path, new_sft_model_name), os.path.join(sft_output_file_path, new_sft_model_name))
     
     
