@@ -124,6 +124,6 @@ if __name__ == '__main__':
         os.makedirs(sft_output_file_path, exist_ok = True)
       
     run_finetuning(sft_dataset, model_name, new_sft_model_name, sft_output_file_path)
-    upload_to_hub(adapter_model_name, os.path.join(sft_output_file_path, new_sft_model_name), os.path.join(sft_output_file_path, new_sft_model_name))
+    upload_to_hub(adapter_model_name, os.path.join(sft_output_file_path, new_sft_model_name), 'KnightHardik/temp_sft_phi2_aic')
     
     
