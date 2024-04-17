@@ -107,10 +107,10 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
 
 if __name__ == '__main__':
     model_name = 'microsoft/phi-2'
-    dataset_name = 'universeTBD/arxiv-astro-abstracts-all'
+    dataset_name = 'AstroMLab/arxiv-astro-abstract-intro-conclusion' #KnightHardik/temp-astro-full-text
     dataset_path = dataset_name
-    # dataset = load_dataset(dataset_path)['train'].select(range(100))
-    dataset = load_from_disk(dataset_path)
+    dataset = load_dataset(dataset_path)['split_train'].select(range(100))
+    # dataset = load_from_disk(dataset_path)
     new_model_name = 'astrophi-full'
     output_file_path = 'stored_output_model'
     
