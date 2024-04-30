@@ -1,16 +1,19 @@
 import torch
+from tqdm import trange
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainingArguments
 from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training, get_peft_model
 from trl import SFTTrainer
 from datasets import Dataset
 import pandas as pd
-from global_variables_qwen import *
+from global_variables_phi2 import *
 import os
 from datasets import load_dataset, load_from_disk
-
+from accelerate import PartialState
 
 def run_finetuning(dataset, model_name, new_model_name, output_path):
-
+    
+    #device_string = PartialState().process_index
+    #device_map = {'': device_string}
     # Load tokenizer and model with QLoRA configuration
     compute_dtype = getattr(torch, bnb_4bit_compute_dtype)
 
@@ -22,21 +25,31 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
     )
 
     tokenizer_path = model_name
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast = True)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"  # Fix weird overflow issue with fp16 training
     tokenizer.add_eos_token = True
-
+    
     print("tokenizer done")
     
-    def tokenize_function(examples):
-      return tokenizer(examples["text"], truncation=True)
+    #batch_size = 256
+    def batched_tokenize_function(batch):
+        #tokenized_examples = []
+        #for i in trange(0, len(examples), batch_size):
+           # batch = examples[i:i+batch_size]
+        return tokenizer(batch['text'], truncation=True)
+        #tokenized_examples.extend(batch_tokenized)
 
-    train_dataset = dataset #.shuffle().map(tokenize_function, batched=True)
+        #return {"input_ids" : [example["input_ids"] for example in tokenized_examples]}
+    
+    chunk_size = 2
+    train_dataset = dataset.shuffle().map(batched_tokenize_function, batched=True, batch_size = chunk_size)
     print("DATA_LOADED")
+    print(train_dataset)
 
     model_path = model_name
-    model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=bnb_config)
+    model = AutoModelForCausalLM.from_pretrained(model_name)#, quantization_config=bnb_config)
+    # model = model.to('cuda')
     print("MODEL INITIALIZED")
     print("Model's parameters device:", next(model.parameters()).device)
 
@@ -53,8 +66,7 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         r=lora_r,
         bias="none",
         task_type="CAUSAL_LM",
-        target_modules = ["q_proj", "k_proj", "v_proj", "o_proj","gate_proj", "up_proj"]
-        )
+        target_modules = ["q_proj", "k_proj", "v_proj"])
 
     # Set training parameters
     training_arguments = TrainingArguments(
@@ -70,19 +82,21 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         max_grad_norm=max_grad_norm,
         max_steps=max_steps,
         warmup_ratio=warmup_ratio,
+        bf16=True,
         group_by_length=group_by_length,
-        lr_scheduler_type=lr_scheduler_type,
-        report_to="tensorboard")
+        gradient_checkpointing = True,
+        gradient_checkpointing_kwargs = {'use_reentrant': True},
+        lr_scheduler_type=lr_scheduler_type)
 
     print("LOADED TRAINING ARGUMENTS")
     
     # Set supervised fine-tuning parameters
     trainer = SFTTrainer(
         model=model,
-        train_dataset=dataset,
+        train_dataset=train_dataset,
         peft_config=peft_config,
         dataset_text_field="text",
-        max_seq_length=200,
+        max_seq_length= tokenizer.model_max_length,
         tokenizer=tokenizer,
         args=training_arguments,
         packing=packing
@@ -90,11 +104,17 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
 
     # Train model
     print("training_started")
+    
+    trainer.model.print_trainable_parameters()
+    if getattr(trainer.accelerator.state, "fsdp_plugin", None):
+        from peft.utils.other import fsdp_auto_wrap_policy     
+        fsdp_plugin = trainer.accelerator.state.fsdp_plugin
+        fsdp_plugin.auto_wrap_policy = fsdp_auto_wrap_policy(trainer.model)
 
     trainer.train()
     # Save trained model
     trainer.model.save_pretrained( f'{output_path}/{new_model_name}')
-
+   
     model_state_dict = model.state_dict()
     torch.save(model_state_dict, f'{output_path}/{new_model_name}_state.pt')
 
@@ -102,13 +122,13 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
 
 
 if __name__ == '__main__':
-    model_name = 'Qwen/Qwen1.5-1.8B'
-    dataset_name = 'universeTBD/arxiv-astro-abstracts-all'
+    model_name = 'Qwen/Qwen1.5-4B'
+    dataset_name = 'KnightHardik/temp-astro-full-text'
     dataset_path = dataset_name
-    # dataset = load_dataset(dataset_path)['train'].select(range(100))
-    dataset = load_from_disk(dataset_path)
+    dataset = load_dataset(dataset_path)['train'].select(range(1000))
+    # dataset = load_from_disk(dataset_path)
     new_model_name = 'astroqwen-full'
-    output_file_path = 'stored_output_model'
+    output_file_path = 'stored_output_model_cpt'
     
     if not os.path.exists(output_file_path):
         os.makedirs(output_file_path, exist_ok = True)

@@ -8,15 +8,15 @@ def upload_to_hub(base_model_name, adapter_model_name, output_model_name):
   tokenizer.padding_side = "right"
   
   peft_model = PeftModel.from_pretrained(base_model, adapter_model_name)
-  peft_model = model.merge_and_unload()
+  peft_model = peft_model.merge_and_unload()
   
   peft_model.push_to_hub(output_model_name)
-  peft_tokenizer.push_to_hub(output_model_name)
+  tokenizer.push_to_hub(output_model_name)
 
 if __name__ == '__main__':
-  base_model_name = 'Qwen/Qwen1.5-1.8B'
-  adapter_model_name = 'KnightHardik/temp_astroqwen_1.8B'
-  output_model_name = 'KnightHardik/temp_astroqwen_1.8B_aic'
+  base_model_name = 'microsoft/phi-2'
+  adapter_model_name = 'stored_output_model_sft/sft_astrophi-full'
+  output_model_name = 'KnightHardik/astrophi-full'
 
   upload_to_hub(base_model_name, adapter_model_name, output_model_name)
    

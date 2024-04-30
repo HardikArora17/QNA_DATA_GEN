@@ -1,6 +1,6 @@
 import torch
 from tqdm import trange
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainingArguments
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainingArguments, Trainer
 from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training, get_peft_model
 from trl import SFTTrainer
 from datasets import Dataset
@@ -8,12 +8,14 @@ import pandas as pd
 from global_variables_phi2 import *
 import os
 from datasets import load_dataset, load_from_disk
-from accelerate import PartialState
+from accelerate import Accelerator
+import deepspeed
+import json
 
 def run_finetuning(dataset, model_name, new_model_name, output_path):
     
-    device_string = PartialState().process_index
-    device_map = {'': device_string}
+    #device_string = PartialState().process_index
+    #device_map = {'': device_string}
     # Load tokenizer and model with QLoRA configuration
     compute_dtype = getattr(torch, bnb_4bit_compute_dtype)
 
@@ -25,7 +27,7 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
     )
 
     tokenizer_path = model_name
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast = True, device_map = device_map)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast = True)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"  # Fix weird overflow issue with fp16 training
     tokenizer.add_eos_token = True
@@ -37,19 +39,23 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         #tokenized_examples = []
         #for i in trange(0, len(examples), batch_size):
            # batch = examples[i:i+batch_size]
-        return tokenizer(batch['text'], truncation=True)
-        #tokenized_examples.extend(batch_tokenized)
-
-        #return {"input_ids" : [example["input_ids"] for example in tokenized_examples]}
+        tokenized_examples  = tokenizer(batch['text'], truncation=True, max_length=512)
+        return {"input_ids" : tokenized_examples["input_ids"] }
     
-    chunk_size = 200
+    chunk_size = 2
     train_dataset = dataset.shuffle().map(batched_tokenize_function, batched=True, batch_size = chunk_size)
     print("DATA_LOADED")
     print(train_dataset)
+    
+    with open('ds_config_zero.json' ,'r') as out:
+        ds_config = json.load(out)
 
+    #acc= Accelerator()
     model_path = model_name
-    model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=bnb_config, device_map=device_map)
-    # model = model.to('cuda')
+    model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code =True)
+    #model, _, _ ,_  = deepspeed.initialize(model=model, model_parameters = model.parameters(), config =ds_config)
+
+    #model = acc.prepare(model)    # model = model.to('cuda')
     print("MODEL INITIALIZED")
     print("Model's parameters device:", next(model.parameters()).device)
 
@@ -58,19 +64,6 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
 
     model.config.use_cache = False
     model.config.pretraining_tp = 1
-
-    # Load LoRA configuration
-    peft_config = LoraConfig(
-        lora_alpha=lora_alpha,
-        lora_dropout=lora_dropout,
-        r=lora_r,
-        bias="none",
-        task_type="CAUSAL_LM",
-        target_modules = [
-        "Wqkv",
-        "fc1",     # Targeting the first fully connected layer in PhiMLP
-        "fc2"     # Targeting the second fully connected layer in PhiMLP]
-        ])
 
     # Set training parameters
     training_arguments = TrainingArguments(
@@ -83,6 +76,8 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         learning_rate=learning_rate,
         weight_decay=weight_decay,
         optim=optim,
+        bf16=True,
+        deepspeed = 'ds_config_zero.json',
         max_grad_norm=max_grad_norm,
         max_steps=max_steps,
         warmup_ratio=warmup_ratio,
@@ -94,17 +89,12 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
     print("LOADED TRAINING ARGUMENTS")
     
     # Set supervised fine-tuning parameters
-    trainer = SFTTrainer(
-        model=model,
-        train_dataset=train_dataset,
-        peft_config=peft_config,
-        dataset_text_field="text",
-        max_seq_length= tokenizer.model_max_length,
-        tokenizer=tokenizer,
-        args=training_arguments,
-        packing=packing
-    )
-
+    trainer = Trainer(
+                model=model,
+                train_dataset=train_dataset,
+                tokenizer=tokenizer,
+                args=training_arguments)
+    
     # Train model
     print("training_started")
 
@@ -119,12 +109,13 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
 
 
 if __name__ == '__main__':
-    model_name = 'microsoft/phi-2'
+    model_name = 'Qwen/Qwen1.5-1.8B'
+
     dataset_name = 'KnightHardik/temp-astro-full-text'
     dataset_path = dataset_name
-    dataset = load_dataset(dataset_path)['train']
+    dataset = load_dataset(dataset_path)['train'].select(range(100))
     # dataset = load_from_disk(dataset_path)
-    new_model_name = 'astrophi-full'
+    new_model_name = 'astroqwen-1.8B-full'
     output_file_path = 'stored_output_model_cpt'
     
     if not os.path.exists(output_file_path):

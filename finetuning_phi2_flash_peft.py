@@ -1,4 +1,5 @@
 import torch
+from tqdm import trange
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainingArguments
 from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training, get_peft_model
 from trl import SFTTrainer
@@ -7,10 +8,10 @@ import pandas as pd
 from global_variables_phi2 import *
 import os
 from datasets import load_dataset, load_from_disk
-from upload_to_hub import upload_to_hub
 from accelerate import PartialState
 
 def run_finetuning(dataset, model_name, new_model_name, output_path):
+    
     device_string = PartialState().process_index
     device_map = {'': device_string}
     # Load tokenizer and model with QLoRA configuration
@@ -23,22 +24,36 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         bnb_4bit_use_double_quant=use_nested_quant,
     )
 
-    tokenizer_path = "microsoft/phi-2"
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer_path = model_name
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast = True, device_map = device_map)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"  # Fix weird overflow issue with fp16 training
     tokenizer.add_eos_token = True
-
+    
     print("tokenizer done")
     
-    train_dataset = dataset #.shuffle().map(tokenize_function, batched=True)
+    #batch_size = 256
+    def batched_tokenize_function(batch):
+        #tokenized_examples = []
+        #for i in trange(0, len(examples), batch_size):
+           # batch = examples[i:i+batch_size]
+        return tokenizer(batch['text'], truncation=True)
+        #tokenized_examples.extend(batch_tokenized)
+
+        #return {"input_ids" : [example["input_ids"] for example in tokenized_examples]}
+    
+    chunk_size = 200
+    train_dataset = dataset.shuffle().map(batched_tokenize_function, batched=True, batch_size = chunk_size)
     print("DATA_LOADED")
+    print(train_dataset)
 
     model_path = model_name
-    model = AutoModelForCausalLM.from_pretrained(model_path, quantization_config=bnb_config)
-    
+    model = AutoModelForCausalLM.from_pretrained(model_name, attn_implementation = 'flash_attention_2', quantization_config=bnb_config, device_map=device_map)
+    # model = model.to('cuda')
     print("MODEL INITIALIZED")
     print("Model's parameters device:", next(model.parameters()).device)
+
+    # Alternatively, you can print the device of the model itself
     print("Model's device:", next(model.parameters()).device)
 
     model.config.use_cache = False
@@ -72,6 +87,8 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         max_steps=max_steps,
         warmup_ratio=warmup_ratio,
         group_by_length=group_by_length,
+        gradient_checkpointing = True,
+        gradient_checkpointing_kwargs = {'use_reentrant':False},
         lr_scheduler_type=lr_scheduler_type)
 
     print("LOADED TRAINING ARGUMENTS")
@@ -79,7 +96,7 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
     # Set supervised fine-tuning parameters
     trainer = SFTTrainer(
         model=model,
-        train_dataset=dataset,
+        train_dataset=train_dataset,
         peft_config=peft_config,
         dataset_text_field="text",
         max_seq_length= tokenizer.model_max_length,
@@ -92,39 +109,26 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
     print("training_started")
 
     trainer.train()
+    # Save trained model
     trainer.model.save_pretrained( f'{output_path}/{new_model_name}')
-    print("Model saved.")
+
+    model_state_dict = model.state_dict()
+    torch.save(model_state_dict, f'{output_path}/{new_model_name}_state.pt')
+
+    print("Model state dictionary saved.")
 
 
 if __name__ == '__main__':
-    #From continual_pretraining step
-    base_model_name = 'microsoft/phi-2'
-    new_cpt_model_name = 'astrophi-full'
-    cpt_output_file_path = 'stored_output_model_cpt'
-
-    adapter_model_name = os.path.join(cpt_output_file_path, new_cpt_model_name)
-
-    # Saving the full model
-    base_model_path = base_model_name
-    #base_model  = AutoModelForCausalLM.from_pretrained(base_model_path, device_map='auto')  
-    #peft_model = PeftModel.from_pretrained(base_model, adapter_model_name)
-    #model = peft_model.merge_and_unload()
-    #model.save_pretrained(f'{cpt_output_file_path}/{new_cpt_model_name}-no-peft')
+    model_name = 'microsoft/phi-2'
+    dataset_name = 'KnightHardik/temp-astro-full-text'
+    dataset_path = dataset_name
+    dataset = load_dataset(dataset_path)['train'].select(range(2000))
+    # dataset = load_from_disk(dataset_path)
+    new_model_name = 'astrophi-full'
+    output_file_path = 'stored_output_model_cpt'
     
-    #Supervised finetuning
-    model_name = os.path.join(cpt_output_file_path, new_cpt_model_name+"-no-peft")
-    new_sft_model_name = 'sft_astrophi-full'
+    if not os.path.exists(output_file_path):
+        os.makedirs(output_file_path, exist_ok = True)
     
-    sft_dataset_name = 'AstroMLab/astro-ph-qa_extended_text-only'
-    sft_dataset_path = sft_dataset_name
-    sft_dataset = load_dataset(sft_dataset_path)['split_train']
-    
-    sft_output_file_path = 'stored_output_model_sft'
-    
-    if not os.path.exists(sft_output_file_path):
-        os.makedirs(sft_output_file_path, exist_ok = True)
-      
-    run_finetuning(sft_dataset, model_name, new_sft_model_name, sft_output_file_path)
-    #upload_to_hub(adapter_model_name, os.path.join(sft_output_file_path, new_sft_model_name), 'KnightHardik/temp_sft_phi2_aic')
-    
-    
+    print("directories_made")
+    run_finetuning(dataset, model_name, new_model_name, output_file_path)

@@ -23,7 +23,7 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         bnb_4bit_use_double_quant=use_nested_quant,
     )
 
-    tokenizer_path = "microsoft/phi-2"
+    tokenizer_path = model_name
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"  # Fix weird overflow issue with fp16 training
@@ -32,6 +32,7 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
     print("tokenizer done")
     
     train_dataset = dataset #.shuffle().map(tokenize_function, batched=True)
+    print(dataset)
     print("DATA_LOADED")
 
     model_path = model_name
@@ -40,7 +41,7 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
     print("MODEL INITIALIZED")
     print("Model's parameters device:", next(model.parameters()).device)
     print("Model's device:", next(model.parameters()).device)
-
+    
     model.config.use_cache = False
     model.config.pretraining_tp = 1
 
@@ -52,9 +53,13 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         bias="none",
         task_type="CAUSAL_LM",
         target_modules = [
-        "Wqkv",
-        "fc1",     # Targeting the first fully connected layer in PhiMLP
-        "fc2"     # Targeting the second fully connected layer in PhiMLP]
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "up_proj",
+        "gate_proj",
+        "down_proj"
         ])
 
     # Set training parameters
@@ -68,6 +73,7 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         learning_rate=learning_rate,
         weight_decay=weight_decay,
         optim=optim,
+        deepspeed = 'ds_config_zero.json',
         max_grad_norm=max_grad_norm,
         max_steps=max_steps,
         warmup_ratio=warmup_ratio,
@@ -75,49 +81,39 @@ def run_finetuning(dataset, model_name, new_model_name, output_path):
         lr_scheduler_type=lr_scheduler_type)
 
     print("LOADED TRAINING ARGUMENTS")
-    
+    def formatting_prompts_func(examples):
+        output_texts = []
+        for i in range(len(examples)):
+            text = f"### Instruction: Generate a hypothesis about the following problem: {examples['Problem'][i]}\n ### Hypothesis\n: {examples['Problem'][i]}\n {examples['Solution'][i]}\n {examples['Methodology'][i]}\n {examples['Evaluation'][i]}\n {examples['Results'][i]}"
+            output_texts.append(text)
+        return output_texts
+
     # Set supervised fine-tuning parameters
     trainer = SFTTrainer(
         model=model,
         train_dataset=dataset,
         peft_config=peft_config,
-        dataset_text_field="text",
-        max_seq_length= tokenizer.model_max_length,
+        max_seq_length= 32,
+        dataset_text_field = 'Abstract',
         tokenizer=tokenizer,
         args=training_arguments,
-        packing=packing
-    )
+        packing=packing)
 
-    # Train model
     print("training_started")
-
     trainer.train()
     trainer.model.save_pretrained( f'{output_path}/{new_model_name}')
     print("Model saved.")
 
 
 if __name__ == '__main__':
-    #From continual_pretraining step
-    base_model_name = 'microsoft/phi-2'
-    new_cpt_model_name = 'astrophi-full'
-    cpt_output_file_path = 'stored_output_model_cpt'
-
-    adapter_model_name = os.path.join(cpt_output_file_path, new_cpt_model_name)
-
-    # Saving the full model
-    base_model_path = base_model_name
-    #base_model  = AutoModelForCausalLM.from_pretrained(base_model_path, device_map='auto')  
-    #peft_model = PeftModel.from_pretrained(base_model, adapter_model_name)
-    #model = peft_model.merge_and_unload()
-    #model.save_pretrained(f'{cpt_output_file_path}/{new_cpt_model_name}-no-peft')
-    
+    base_model_name = 'meta-llama/Meta-Llama-3-70B-Instruct'
     #Supervised finetuning
-    model_name = os.path.join(cpt_output_file_path, new_cpt_model_name+"-no-peft")
-    new_sft_model_name = 'sft_astrophi-full'
+    model_name = base_model_name
+    new_sft_model_name = 'llama-3-70B-Instruct-sft'
     
-    sft_dataset_name = 'AstroMLab/astro-ph-qa_extended_text-only'
+    sft_dataset_name = 'charlieoneill/hypogen_shared_task'
     sft_dataset_path = sft_dataset_name
-    sft_dataset = load_dataset(sft_dataset_path)['split_train']
+    sft_dataset = load_dataset(sft_dataset_path)['train']
     
     sft_output_file_path = 'stored_output_model_sft'
     
